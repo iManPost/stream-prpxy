@@ -1,170 +1,51 @@
-<!DOCTYPE html>
-<html lang="th">
+<html>
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Stream Player</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.12/hls.min.js"></script>
-  <style>
-    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    body{
-      background:#07070d;color:#ddd;
-      font-family:'Segoe UI',system-ui,sans-serif;
-      min-height:100vh;display:flex;
-      flex-direction:column;align-items:center;
-      justify-content:center;padding:20px 14px;
-    }
-    .wrap{width:100%;max-width:960px}
-    .topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
-    .topbar h1{font-size:.75rem;letter-spacing:.14em;text-transform:uppercase;color:#555}
-    .dot{width:9px;height:9px;border-radius:50%;background:#333;transition:background .4s}
-    .dot.live{background:#e63946;box-shadow:0 0 7px #e6394699;animation:blink 1.8s ease-in-out infinite}
-    @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
-
-    .video-wrap{
-      position:relative;width:100%;aspect-ratio:16/9;
-      background:#111;border-radius:10px;overflow:hidden;
-      box-shadow:0 8px 48px rgba(0,0,0,.7),0 0 0 1px rgba(255,255,255,.06);
-    }
-    video{width:100%;height:100%;display:block;background:#000}
-
-    .overlay{
-      position:absolute;inset:0;
-      display:flex;flex-direction:column;
-      align-items:center;justify-content:center;
-      background:rgba(7,7,13,.8);transition:opacity .3s;
-    }
-    .overlay.hide{opacity:0;pointer-events:none}
-    .spinner{
-      width:46px;height:46px;
-      border:3px solid rgba(255,255,255,.08);
-      border-top-color:#e63946;border-radius:50%;
-      animation:spin .8s linear infinite;margin-bottom:12px;
-    }
-    @keyframes spin{to{transform:rotate(360deg)}}
-    .overlay p{font-size:.78rem;color:#555;letter-spacing:.06em}
-
-    .statusbar{
-      margin-top:9px;display:flex;gap:8px;
-      font-size:.69rem;font-family:monospace;
-      color:#2e2e4e;align-items:center;
-    }
-    .statusbar span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
-    .badge{color:#4caf7d;font-weight:700;flex-shrink:0}
-
-    #errbox{
-      display:none;margin-top:10px;padding:14px 18px;
-      background:#1a0a0a;border:1px solid #4a1010;border-radius:8px;
-      font-size:.78rem;line-height:1.7;color:#e07070;
-    }
-    #errbox code{background:#2a1010;padding:1px 5px;border-radius:3px;font-size:.72rem}
-    .retry{
-      margin-top:8px;padding:7px 18px;background:#e63946;color:#fff;
-      border:none;border-radius:6px;font-size:.75rem;font-weight:700;
-      cursor:pointer;
-    }
-    .retry:hover{background:#c1121f}
-  </style>
-</head>
-<body>
-<div class="wrap">
-  <div class="topbar">
-    <h1>▶ Stream Player</h1>
-    <div class="dot" id="dot"></div>
-  </div>
-
-  <div class="video-wrap">
-    <video id="vid" controls playsinline></video>
-    <div class="overlay" id="overlay">
-      <div class="spinner"></div>
-      <p id="overlayMsg">กำลังโหลด…</p>
-    </div>
-  </div>
-
-  <div class="statusbar">
-    <span id="urlLabel">—</span>
-    <span class="badge" id="badge">HLS</span>
-  </div>
-
-  <div id="errbox">
-    <span id="errMsg"></span><br>
-    <button class="retry" onclick="start()">🔄 ลองใหม่</button>
-  </div>
-</div>
-
-<script>
-const STREAM = "http://43.229.132.25:80/play/bQ-fFu7dMOtIPDjoXbK1w5H53SITSMYtRd-Oqf6wLL0/m3u8";
-
-const vid       = document.getElementById("vid");
-const overlay   = document.getElementById("overlay");
-const overlayMsg= document.getElementById("overlayMsg");
-const dot       = document.getElementById("dot");
-const urlLabel  = document.getElementById("urlLabel");
-const badge     = document.getElementById("badge");
-const errbox    = document.getElementById("errbox");
-const errMsg    = document.getElementById("errMsg");
-
-urlLabel.textContent = STREAM;
-
-function setLive(on){ dot.className = "dot"+(on?" live":""); }
-function showOverlay(msg){ overlayMsg.textContent=msg||"กำลังโหลด…"; overlay.classList.remove("hide"); }
-function hideOverlay(){ overlay.classList.add("hide"); }
-function showErr(msg){ errbox.style.display="block"; errMsg.textContent=msg; }
-function hideErr(){ errbox.style.display="none"; }
-
-let hls = null;
-
-function start(){
-  hideErr(); showOverlay("กำลังโหลด…");
-  if(hls){ hls.destroy(); hls=null; }
-  vid.removeAttribute("src");
-
-  if(Hls.isSupported()){
-    hls = new Hls({
-      enableWorker: true,
-      lowLatencyMode: true,
-      maxBufferLength: 30,
-      xhrSetup: xhr => { xhr.withCredentials = false; }
-    });
-    hls.loadSource(STREAM);
-    hls.attachMedia(vid);
-
-    hls.on(Hls.Events.MANIFEST_PARSED, (_,d) => {
-      hideErr();
-      const top = d.levels[d.levels.length-1];
-      if(top?.height) badge.textContent = top.height+"p";
-      vid.play().catch(()=>{});
-    });
-
-    hls.on(Hls.Events.FRAG_LOADED, ()=>{ hideOverlay(); setLive(true); hideErr(); });
-
-    hls.on(Hls.Events.ERROR, (_,d) => {
-      if(d.fatal){
-        setLive(false);
-        if(d.type === Hls.ErrorTypes.MEDIA_ERROR){
-          showOverlay("กำลัง recover…");
-          hls.recoverMediaError();
-        } else {
-          showErr("โหลดสตรีมไม่ได้: "+d.details+" — ลอง token อาจหมดอายุ");
-        }
-      }
-    });
-
-  } else if(vid.canPlayType("application/vnd.apple.mpegurl")){
-    // Safari native HLS
-    vid.src = STREAM;
-    vid.addEventListener("loadedmetadata", ()=>{ hideOverlay(); vid.play().catch(()=>{}); },{once:true});
-    vid.addEventListener("error", ()=>{ showErr("เล่นไม่ได้บน Safari — ลองใหม่"); },{once:true});
-  } else {
-    showErr("เบราว์เซอร์ไม่รองรับ HLS");
-  }
+<title>.Player M.PD H.BO</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,shrink-to-fit=no">
+<link rel="stylesheet" type="text/css" href="/clap.css">
+<script src="//cdn.jsdelivr.net/npm/@clappr/player@0.4.0/dist/clappr.min.js"></script>
+<script src="//cdn.jsdelivr.net/npm/mux.js@5.6.7/dist/mux.min.js"></script>
+<script src="//cdn.jsdelivr.net/npm/level-selector@latest/dist/level-selector.min.js"></script>
+<script src="//cdn.jsdelivr.net/npm/clappr-chromecast-plugin@latest/dist/clappr-chromecast-plugin.min.js"></script>
+<script src="//cdn.jsdelivr.net/npm/clappr-pip@latest/dist/clappr-pip.min.js"></script>
+<script src="//cdn.jsdelivr.net/npm/clappr-playback-rate-plugin@latest/dist/clappr-playback-rate-plugin.min.js"></script>
+<script src="//cdn.jsdelivr.net/npm/shaka-player@2.5.10/dist/shaka-player.compiled.min.js"></script>
+<script src="//cdn.jsdelivr.net/gh/clappr/dash-shaka-playback@latest/dist/dash-shaka-playback.external.min.js"></script>
+<script src="//cdn.jsdelivr.net/npm/cdnbye-shaka@latest"></script>
+<style> 
+body {
+    background-color: #000000;
 }
-
-vid.addEventListener("playing", ()=>{ hideOverlay(); setLive(true); hideErr(); });
-vid.addEventListener("waiting", ()=>{ showOverlay("กำลังบัฟเฟอร์…"); });
-vid.addEventListener("pause",   ()=> setLive(false));
-
-start();
-</script>
-</body>
+</style>
+</head>
+<div id="player"></div>
+<script>
+  var player = new Clappr.Player({
+          source: 'https://qp-pldt-live-bpk-02-prod.akamaized.net/bpk-tv/cg_hbohits/default1/index.mpd',
+          mimeType: 'application/dash+xml',
+          height: '100%',
+          width: '100%',
+          autoPlay: true,
+          plugins: [LevelSelector, DashShakaPlayback, Clappr.MediaControl],
+          events: {onReady: function() {var plugin = this.getPlugin('click_to_pause'); plugin && plugin.disable();},},
+          chromecast: {
+              preload: 'metadata',
+              contentType: 'video/mpd',
+          },
+          shakaConfiguration: {
+              drm: {
+              clearKeys: {
+					'b04ae8017b5b4601a5a0c9060f6d5b7d':'a8795f3bdb8a4778b7e888ee484cc7a1'		
+                  }
+              },
+          },
+          shakaOnBeforeLoad: function (shaka_player) {},
+          parentId: '#player'
+      });
+	  
+  </script>
+    <span style='position:absolute;bottom:10px;right:20px;font-size: 15px; font-weight: bold;color: #ff0;'><em>HBO HIT By NETI</em></span>
+   <center>
+  <p><ins>HBO Hit By NETI</ins></p>
+   </center>
 </html>
